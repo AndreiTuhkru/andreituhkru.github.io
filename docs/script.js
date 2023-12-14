@@ -1,3 +1,5 @@
+import { progressOverTime } from "./graph.js";
+
 const submitButton = document.getElementById('submitbutton');
 const logOutButton = document.getElementById('logoutbutton');
 let authToken = null;
@@ -66,62 +68,30 @@ const getDataFromGraphql = async (token) => {
     })
     if (results.ok) {
         const userData = await results.json();
-        console.log('User data: ', userData);
+        //console.log('User data: ', userData);
         // Process the retrieved data and populate the UI
         populateUserData(userData)
         auditRatioGraph(userData)
         progressOT(userData);
     } else {
         console.error('Failed to fetch user data');
-        // Handle error fetching user data
+        alert('Failed to fetch user data');
     }
 };
 
 function progressOT(userData) {
-    const xpOverTimeGraph = document.getElementById('xpOverTimeGraph');
     const user = userData.data.user[0];
+
     const excludedPaths = ["/johvi/div-01/piscine-js/", "/johvi/piscine-go"];
-    const progressSvg = progressOverTime(user.transactions
+    let cumulativeXP = 0;
+
+    progressOverTime(user.transactions
         .filter(transaction => transaction.type === 'xp' && !excludedPaths.some(exPath => transaction.path.startsWith(exPath)))
-        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)))
-
-    xpOverTimeGraph.innerHTML = progressSvg.trim();
-}
-
-function progressOverTime(data) {
-    const width = 600;
-    const height = 400;
-    const timestamps = data.map(t => new Date(t.createdAt).getTime());
-
-    const minX = Math.min(...timestamps);
-    const maxX = Math.max(...timestamps);
-    const maxY = Math.max(...data.map(t => t.amount));
-
-    const scaleX = (time) => (time - minX) / (maxX - minX) * width;
-    const scaleY = (amount) => height - (amount / maxY) * height;
-
-    let svgContent = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
-
-    // Draw lines between points and include timestamps
-    for (let i = 0; i < data.length - 1; i++) {
-        const currentTimestamp = new Date(data[i].createdAt).toLocaleDateString();
-        const nextTimestamp = new Date(data[i + 1].createdAt).toLocaleDateString();
-
-        svgContent += `
-            <line x1="${scaleX(timestamps[i])}" y1="${scaleY(data[i].amount)}"
-                  x2="${scaleX(timestamps[i + 1])}" y2="${scaleY(data[i + 1].amount)}"
-                  stroke="blue" stroke-width="2">
-                <title>${currentTimestamp}</title>
-            </line>
-        `;
-
-        svgContent += `
-            <text x="${scaleX(timestamps[i])}" y="${scaleY(data[i].amount) - 5}" font-size="10" text-anchor="middle">${currentTimestamp}</text>
-        `;
-    }
-
-    svgContent += `</svg>`;
-    return svgContent;
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        .map(transaction => {
+            cumulativeXP += transaction.amount;
+            return { ...transaction, cumulativeXP };
+        }));
 }
 
 const getUserTotalXP = (user) => {
